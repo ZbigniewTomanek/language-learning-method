@@ -1,0 +1,3 @@
+[submodule "deps/pdf-extract-api"]
+	path = deps/pdf-extract-api
+	url = https://github.com/CatchTheTornado/pdf-extract-api.git
