@@ -11,6 +11,7 @@ import requests
 @dataclass
 class ExtractionResult:
     """Data class to store extraction results"""
+
     file_path: str
     extracted_text: Optional[str]
     error: Optional[str] = None
@@ -84,12 +85,12 @@ Formatea la respuesta en markdown o texto sin formato. No escriba nada más
 """
 
     def __init__(
-            self,
-            base_url: str = "http://localhost:8000",
-            model: str = "llama3.1",
-            strategy: str = "llama_vision",
-            storage_profile: str = "default",
-            ocr_cache: bool = True
+        self,
+        base_url: str = "http://localhost:8000",
+        model: str = "llama3.1",
+        strategy: str = "llama_vision",
+        storage_profile: str = "default",
+        ocr_cache: bool = True,
     ):
         """
         Initialize the Text Extraction Service
@@ -101,7 +102,7 @@ Formatea la respuesta en markdown o texto sin formato. No escriba nada más
             storage_profile: Storage profile to use
             ocr_cache: Whether to use OCR caching
         """
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self.model = model
         self.strategy = strategy
         self.storage_profile = storage_profile
@@ -113,12 +114,12 @@ Formatea la respuesta en markdown o texto sin formato. No escriba nada más
         self.result_url = f"{self.base_url}/ocr/result"
 
     def extract_text(
-            self,
-            file_paths: Union[str, List[str]],
-            prompt: Optional[str] = None,
-            prompt_file: Optional[str] = None,
-            storage_filename: Optional[str] = None,
-            print_progress: bool = False
+        self,
+        file_paths: Union[str, List[str]],
+        prompt: Optional[str] = None,
+        prompt_file: Optional[str] = None,
+        storage_filename: Optional[str] = None,
+        print_progress: bool = False,
     ) -> Union[ExtractionResult, List[ExtractionResult]]:
         """
         Extract text from one or multiple PDF files
@@ -137,34 +138,26 @@ Formatea la respuesta en markdown o texto sin formato. No escriba nada más
         # Handle single file path
         if isinstance(file_paths, str):
             return self._process_single_file(
-                file_paths,
-                prompt,
-                prompt_file,
-                storage_filename,
-                print_progress
+                file_paths, prompt, prompt_file, storage_filename, print_progress
             )
 
         # Handle multiple file paths
         results = []
         for file_path in file_paths:
             result = self._process_single_file(
-                file_path,
-                prompt,
-                prompt_file,
-                storage_filename,
-                print_progress
+                file_path, prompt, prompt_file, storage_filename, print_progress
             )
             results.append(result)
 
         return results
 
     def _process_single_file(
-            self,
-            file_path: str,
-            prompt: Optional[str],
-            prompt_file: Optional[str],
-            storage_filename: Optional[str],
-            print_progress: bool
+        self,
+        file_path: str,
+        prompt: Optional[str],
+        prompt_file: Optional[str],
+        storage_filename: Optional[str],
+        print_progress: bool,
     ) -> ExtractionResult:
         """Process a single file and return its extraction result"""
         try:
@@ -176,7 +169,7 @@ Formatea la respuesta en markdown o texto sin formato. No escriba nada más
                     return ExtractionResult(
                         file_path=file_path,
                         extracted_text=None,
-                        error=f"Prompt file not found: {prompt_file}"
+                        error=f"Prompt file not found: {prompt_file}",
                     )
 
             # Try file upload first
@@ -191,54 +184,46 @@ Formatea la respuesta en markdown o texto sin formato. No escriba nada más
                 return ExtractionResult(
                     file_path=file_path,
                     extracted_text=None,
-                    error="Failed to process file using both upload and request methods"
+                    error="Failed to process file using both upload and request methods",
                 )
 
             # If we got direct text response
-            if result.get('text'):
+            if result.get("text"):
                 return ExtractionResult(
-                    file_path=file_path,
-                    extracted_text=result['text']
+                    file_path=file_path, extracted_text=result["text"]
                 )
 
             # If we got a task ID, wait for the result
-            task_id = result.get('task_id')
+            task_id = result.get("task_id")
             if task_id:
                 text_result = self._get_result(task_id, print_progress)
                 return ExtractionResult(
-                    file_path=file_path,
-                    extracted_text=text_result,
-                    task_id=task_id
+                    file_path=file_path, extracted_text=text_result, task_id=task_id
                 )
 
         except Exception as e:
             return ExtractionResult(
-                file_path=file_path,
-                extracted_text=None,
-                error=str(e)
+                file_path=file_path, extracted_text=None, error=str(e)
             )
 
     def _upload_file(
-            self,
-            file_path: str,
-            prompt: Optional[str],
-            storage_filename: Optional[str]
+        self, file_path: str, prompt: Optional[str], storage_filename: Optional[str]
     ) -> Optional[Dict]:
         """Upload file using multipart form data"""
         try:
-            with open(file_path, 'rb') as f:
-                files = {'file': f}
+            with open(file_path, "rb") as f:
+                files = {"file": f}
                 data = {
-                    'ocr_cache': self.ocr_cache,
-                    'model': self.model,
-                    'strategy': self.strategy,
-                    'storage_profile': self.storage_profile
+                    "ocr_cache": self.ocr_cache,
+                    "model": self.model,
+                    "strategy": self.strategy,
+                    "storage_profile": self.storage_profile,
                 }
 
                 if storage_filename:
-                    data['storage_filename'] = storage_filename
+                    data["storage_filename"] = storage_filename
                 if prompt:
-                    data['prompt'] = self._PROMPT
+                    data["prompt"] = self._PROMPT
 
                 response = requests.post(self.upload_url, files=files, data=data)
                 if response.status_code == 200:
@@ -248,28 +233,25 @@ Formatea la respuesta en markdown o texto sin formato. No escriba nada más
             return None
 
     def _request_file(
-            self,
-            file_path: str,
-            prompt: Optional[str],
-            storage_filename: Optional[str]
+        self, file_path: str, prompt: Optional[str], storage_filename: Optional[str]
     ) -> Optional[Dict]:
         """Upload file using base64 encoded request"""
         try:
-            with open(file_path, 'rb') as f:
-                file_content = base64.b64encode(f.read()).decode('utf-8')
+            with open(file_path, "rb") as f:
+                file_content = base64.b64encode(f.read()).decode("utf-8")
 
                 data = {
-                    'ocr_cache': self.ocr_cache,
-                    'model': self.model,
-                    'strategy': self.strategy,
-                    'storage_profile': self.storage_profile,
-                    'file': file_content
+                    "ocr_cache": self.ocr_cache,
+                    "model": self.model,
+                    "strategy": self.strategy,
+                    "storage_profile": self.storage_profile,
+                    "file": file_content,
                 }
 
                 if storage_filename:
-                    data['storage_filename'] = storage_filename
+                    data["storage_filename"] = storage_filename
                 if prompt:
-                    data['prompt'] = self._PROMPT
+                    data["prompt"] = self._PROMPT
 
                 response = requests.post(self.request_url, json=data)
                 if response.status_code == 200:
@@ -289,15 +271,15 @@ Formatea la respuesta en markdown o texto sin formato. No escriba nada más
 
             result = response.json()
 
-            if print_progress and result['state'] != 'SUCCESS':
-                task_info = result.get('info', {})
-                if task_info.get('extracted_text') and not extracted_text_printed:
+            if print_progress and result["state"] != "SUCCESS":
+                task_info = result.get("info", {})
+                if task_info.get("extracted_text") and not extracted_text_printed:
                     extracted_text_printed = True
                     logger.debug(f"Extracted text: {task_info['extracted_text']}")
-            if result['state'] == 'SUCCESS':
+            if result["state"] == "SUCCESS":
                 logger.debug(f"Extraction result: {result['result']}")
-                return result['result']
-            elif result['state'] == 'FAILURE':
+                return result["result"]
+            elif result["state"] == "FAILURE":
                 logger.error(f"Extraction failed: {result['info']}")
                 return None
 

@@ -24,7 +24,7 @@ class PDFSplitter:
 
         try:
             # Open the PDF file
-            with open(pdf_path, 'rb') as file:
+            with open(pdf_path, "rb") as file:
                 # Create PDF reader object
                 pdf_reader = PyPDF2.PdfReader(file)
 
@@ -37,10 +37,12 @@ class PDFSplitter:
                     pdf_writer.add_page(pdf_reader.pages[page_num])
 
                     # Generate output filename
-                    output_filename = output_dir / f"{pdf_path.stem}-page_{page_num + 1}.pdf"
+                    output_filename = (
+                        output_dir / f"{pdf_path.stem}-page_{page_num + 1}.pdf"
+                    )
 
                     # Write the page to a new PDF file
-                    with open(output_filename, 'wb') as output_file:
+                    with open(output_filename, "wb") as output_file:
                         pdf_writer.write(output_file)
 
                     created_files[page_num] = str(output_filename)
