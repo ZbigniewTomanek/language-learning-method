@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
+from src.service.deck_from_prompt_service import DeckFromPromptService
 from src.service.deck_service import DeckService
 from src.service.exercise_builder_service import ExerciseBuilderService
 from src.service.exercise_extraction_service import ExerciseExtractionService
@@ -54,5 +55,10 @@ class ServiceFactory:
         return DeckService(
             llm_service=self.llm_service(),
             persistence_service=self.persistence_service(),
-            data_dir=self.settings.data_dir,
+        )
+
+    @cache
+    def deck_from_prompt_service(self) -> DeckFromPromptService:
+        return DeckFromPromptService(
+            llm_service=self.llm_service(),
         )

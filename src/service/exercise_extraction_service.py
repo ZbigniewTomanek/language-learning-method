@@ -3,21 +3,11 @@ from pathlib import Path
 from typing import List
 
 from loguru import logger
-from pydantic import BaseModel
 
 from src.constants import DATA_DIR
+from src.model import ExtractedExercises, ExtractedExercise
 from src.service.llm_service import LLMService
 from src.service.persitence_service import PersistenceService
-
-
-class ExtractedExercise(BaseModel):
-    title: str
-    instructions: str
-    questions: List[str]
-
-
-class ExtractedExercises(BaseModel):
-    exercises: List[ExtractedExercise]
 
 
 class ExerciseExtractionService:
@@ -51,10 +41,10 @@ Don't write out of character. Only produce what you would say to the student as 
 """
 
     def __init__(
-        self,
-        persistence_service: PersistenceService,
-        llm_service: LLMService,
-        data_dir: Path = DATA_DIR,
+            self,
+            persistence_service: PersistenceService,
+            llm_service: LLMService,
+            data_dir: Path = DATA_DIR,
     ):
         self.data_dir = data_dir
         self.exercises_dir = self.data_dir / "exercises"
@@ -91,7 +81,7 @@ Don't write out of character. Only produce what you would say to the student as 
             self._save_exercises(page_num, exercises, book_name)
 
     def _extract_exercises_from_page(
-        self, content: str, page_num: int
+            self, content: str, page_num: int
     ) -> List[ExtractedExercise]:
         """
         Use the LLM to identify and extract exercises from page content.
@@ -116,7 +106,7 @@ Don't write out of character. Only produce what you would say to the student as 
             return []
 
     def _save_exercises(
-        self, page_num: int, exercises: List[ExtractedExercise], book_path: str
+            self, page_num: int, exercises: List[ExtractedExercise], book_path: str
     ) -> None:
         """
         Save each extracted exercise as a separate markdown file with a Spanish-teacher prompt.
@@ -140,23 +130,3 @@ Don't write out of character. Only produce what you would say to the student as 
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(teacher_prompt)
             logger.info(f"Exercise saved: {file_path}")
-
-
-def main() -> None:
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Extract exercises from workbook pages and create Spanish-teacher prompts"
-    )
-    parser.add_argument("book_path", type=str, help="Path to the book file")
-    parser.add_argument("start_page", type=int, help="Starting page number")
-    parser.add_argument("end_page", type=int, help="Ending page number")
-    args = parser.parse_args()
-
-    exercise_service = ExerciseExtractionService()
-    books_path = Path(args.book_path)
-    exercise_service.extract_exercises(books_path.stem, args.start_page, args.end_page)
-
-
-if __name__ == "__main__":
-    main()

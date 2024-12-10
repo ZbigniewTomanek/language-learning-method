@@ -40,18 +40,10 @@ Don't write out of character. Only produce what you would say to the student as 
     def build_exercise_prompts(
         self,
         book_name: str,
+        out_dir: Path,
         start_page: Optional[int] = None,
         end_page: Optional[int] = None,
     ) -> None:
-        """
-        Retrieves exercises from the database and builds markdown prompts for specified pages.
-        If start_page and end_page are not provided, processes all exercises for the book.
-
-        Args:
-            book_name: Name of the book to process
-            start_page: Optional starting page number
-            end_page: Optional ending page number
-        """
         logger.info(f"Building exercise prompts for {book_name}")
 
         if start_page is not None and end_page is not None:
@@ -71,10 +63,16 @@ Don't write out of character. Only produce what you would say to the student as 
 
             # Process each page's exercises
             for page_num, page_exercises in exercises_by_page.items():
-                self._process_page_exercises(book_name, page_num, page_exercises)
+                self._process_page_exercises(
+                    book_name, page_num, page_exercises, out_dir
+                )
 
     def _process_page_exercises(
-        self, book_name: str, page_num: int, exercises: List[StoredExercise]
+        self,
+        book_name: str,
+        page_num: int,
+        exercises: List[StoredExercise],
+        out_dir: Path,
     ) -> None:
         """
         Process and save exercises for a specific page.
@@ -84,7 +82,7 @@ Don't write out of character. Only produce what you would say to the student as 
             page_num: Page number
             exercises: List of exercises to process
         """
-        output_dir = self._ensure_output_directory(book_name, page_num)
+        output_dir = self._ensure_output_directory(book_name, page_num, out_dir)
 
         for i, exercise in enumerate(exercises, start=1):
             prompt = self._build_teacher_prompt(exercise)
@@ -107,7 +105,9 @@ Don't write out of character. Only produce what you would say to the student as 
             questions=questions_text,
         )
 
-    def _ensure_output_directory(self, book_name: str, page_num: int) -> Path:
+    def _ensure_output_directory(
+        self, book_name: str, page_num: int, out_dir: Path
+    ) -> Path:
         """
         Ensure the output directory exists for the given book and page.
 
@@ -118,12 +118,13 @@ Don't write out of character. Only produce what you would say to the student as 
         Returns:
             Path: Path to the output directory
         """
-        output_dir = self.exercises_dir / book_name / f"page_{page_num}"
+        output_dir = out_dir / f"{book_name}_exercises" / f"page_{page_num}"
         output_dir.mkdir(parents=True, exist_ok=True)
         return output_dir
 
+    @staticmethod
     def _save_prompt(
-        self, output_dir: Path, page_num: int, exercise_num: int, prompt: str
+        output_dir: Path, page_num: int, exercise_num: int, prompt: str
     ) -> None:
         """
         Save a prompt to a markdown file.

@@ -4,22 +4,10 @@ from pathlib import Path
 from typing import List
 
 from loguru import logger
-from pydantic import BaseModel
 
-from src.constants import DATA_DIR
+from src.model import AnkiDeck, AnkiCard
 from src.service.llm_service import LLMService
 from src.service.persitence_service import PersistenceService
-
-
-class AnkiCard(BaseModel):
-    front: str
-    back: str
-    notes: str
-    tags: str
-
-
-class AnkiDeck(BaseModel):
-    cards: List[AnkiCard]
 
 
 class DeckService:
@@ -81,20 +69,14 @@ For each concept, create multiple cards that approach it from different angles.
 """
 
     def __init__(
-        self,
-        llm_service: LLMService,
-        persistence_service: PersistenceService,
-        data_dir: Path = DATA_DIR,
+            self,
+            llm_service: LLMService,
+            persistence_service: PersistenceService,
     ):
-        self.data_dir = data_dir
-        self.decks_dir = self.data_dir / "decks"
-        if not self.decks_dir.exists():
-            self.decks_dir.mkdir()
         self.persistence_service = persistence_service
         self.llm_service = llm_service
-        logger.info(f"DeckService initialized with data directory: {self.data_dir}")
 
-    def create_deck(self, book_name: str, start_page: int, end_page: int) -> str:
+    def create_deck(self, book_name: str, start_page: int, end_page: int, out_dir: Path) -> str:
         """
         Create an Anki deck from specified pages of a textbook
         """
@@ -124,7 +106,7 @@ For each concept, create multiple cards that approach it from different angles.
 
         book_name = os.path.splitext(os.path.basename(book_name))[0]
         filename = f"deck_{book_name}_{start_page}-{end_page}.csv"
-        output_file = self.decks_dir / book_name / filename
+        output_file = out_dir / book_name / filename
         if not output_file.parent.exists():
             output_file.parent.mkdir(parents=True)
 
@@ -133,7 +115,7 @@ For each concept, create multiple cards that approach it from different angles.
         return filename
 
     def _generate_cards_for_page(
-        self, content: str, page_num: int, system_prompt: str
+            self, content: str, page_num: int, system_prompt: str
     ) -> List[AnkiCard]:
         """Generate Anki cards for a single page using GPT-4"""
         logger.info(f"Generating cards for page {page_num}")
@@ -172,7 +154,7 @@ Page number for reference: {page_num}"""
         logger.info(f"Saving {len(cards)} cards to {file}")
         with open(file, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            writer.writerow(["front", "back", "notes", "tags"])
+            writer.writerow(["front", "back"])
             for card in cards:
-                writer.writerow([card.front, card.back, card.notes, card.tags])
+                writer.writerow([card.front, card.back])
         logger.info(f"Cards successfully saved to {file}")

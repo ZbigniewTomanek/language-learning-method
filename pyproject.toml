@@ -14,6 +14,7 @@ dependencies = [
     "langchain-ollama>=0.2.1",
     "pydantic-settings>=2.6.1",
     "typer>=0.15.1",
+    "appdirs>=1.4.4",
 ]
 
 [dependency-groups]
