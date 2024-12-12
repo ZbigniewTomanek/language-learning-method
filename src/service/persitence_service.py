@@ -1,4 +1,6 @@
 import sqlite3
+import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -50,6 +52,25 @@ class StoredExercise:
     extracted_at: datetime
 
 
+@dataclass
+class Book:
+    name: str
+    added_at: datetime
+    book_content: bytes
+
+    @contextmanager
+    def temp_pdf(self):
+        tmp_dir = tempfile.gettempdir()
+        pdf_path = Path(tmp_dir) / "temp.pdf"
+        with open(pdf_path, "wb") as f:
+            f.write(self.book_content)
+
+        try:
+            yield self
+        finally:
+            pdf_path.unlink(missing_ok=True)
+
+
 class PersistenceService:
     def __init__(self, data_dir: Path = DATA_DIR, db_path: str = "parsed_pages.db"):
         self.db_path = (data_dir / db_path).as_posix()
@@ -88,7 +109,6 @@ class PersistenceService:
             """
             )
 
-            # New questions table for storing exercise questions
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS exercise_questions (
@@ -100,7 +120,66 @@ class PersistenceService:
                 )
             """
             )
+
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS books (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    book_content_base64 TEXT NOT NULL,
+                    date_added TIMESTAMP NOT NULL
+                )
+                """
+            )
             conn.commit()
+
+    def add_book(self, book_path: Path, book_name: str) -> Book:
+        with open(book_path, "rb") as f:
+            book_content = f.read()
+        book_content_base64 = book_content.hex()
+        book = Book(name=book_name, added_at=datetime.now(), book_content=book_content)
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO books (name, book_content_base64, date_added)
+                VALUES (?, ?, ?)
+                """,
+                (book_name, book_content_base64, book.added_at.isoformat()),
+            )
+            conn.commit()
+        return book
+
+    def get_book(self, book_name: str) -> Optional[Book]:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT name, book_content_base64, date_added
+                FROM books
+                WHERE name = ?
+                """,
+                (book_name,),
+            )
+            row = cursor.fetchone()
+            if row:
+                return Book(
+                    name=row[0],
+                    added_at=datetime.fromisoformat(row[2]),
+                    book_content=bytes.fromhex(row[1]),
+                )
+        return None
+
+    def list_book_names(self) -> list[str]:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT name
+                FROM books
+                """
+            )
+            return [row[0] for row in cursor.fetchall()]
 
     def store_exercise(self, exercise: StoredExercise) -> int:
         """Store an exercise and its questions in the database"""

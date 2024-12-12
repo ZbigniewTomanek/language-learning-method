@@ -53,8 +53,8 @@ class DeckFromPromptService:
     """
 
     def __init__(
-            self,
-            llm_service: LLMService,
+        self,
+        llm_service: LLMService,
     ):
         self.llm_service = llm_service
 
@@ -100,7 +100,7 @@ class DeckFromPromptService:
             topics: ListOfTopics = self.llm_service.prompt_with_structure(
                 system_prompt=self._TOPIC_EVALUATION_PROMPT,
                 prompt=prompt,
-                response_model=ListOfTopics
+                response_model=ListOfTopics,
             )
             logger.info(f"Successfully identified {len(topics.topics)} topics")
             return topics
@@ -116,14 +116,14 @@ class DeckFromPromptService:
             topic_name=topic.name,
             topic_description=topic.description,
             difficulty_level=topic.difficulty_level,
-            num_cards=num_cards
+            num_cards=num_cards,
         )
 
         try:
             deck: AnkiDeck = self.llm_service.prompt_with_structure(
                 system_prompt=formatted_prompt,
                 prompt="Generate the flashcards as specified above.",
-                response_model=AnkiDeck
+                response_model=AnkiDeck,
             )
             return deck.cards
         except Exception as e:

@@ -1,3 +1,4 @@
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -18,6 +19,17 @@ class PDFParser:
         self.persistence_service = PersistenceService()
         self.pdf_splitter = PDFSplitter()
         self.text_extraction_service = TextExtractionService()
+
+    def parse_pdf_from_bytes(self, pdf_bytes: bytes) -> None:
+        tmp_dir = tempfile.gettempdir()
+        pdf_path = Path(tmp_dir) / "temp.pdf"
+        with open(pdf_path, "wb") as f:
+            f.write(pdf_bytes)
+
+        try:
+            self.parse_pdf(pdf_path)
+        finally:
+            pdf_path.unlink()
 
     def parse_pdf(self, pdf_path: Path) -> None:
         book_name = pdf_path.stem

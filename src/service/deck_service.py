@@ -69,14 +69,16 @@ For each concept, create multiple cards that approach it from different angles.
 """
 
     def __init__(
-            self,
-            llm_service: LLMService,
-            persistence_service: PersistenceService,
+        self,
+        llm_service: LLMService,
+        persistence_service: PersistenceService,
     ):
         self.persistence_service = persistence_service
         self.llm_service = llm_service
 
-    def create_deck(self, book_name: str, start_page: int, end_page: int, out_dir: Path) -> str:
+    def create_deck(
+        self, book_name: str, start_page: int, end_page: int, out_dir: Path
+    ) -> str:
         """
         Create an Anki deck from specified pages of a textbook
         """
@@ -115,7 +117,7 @@ For each concept, create multiple cards that approach it from different angles.
         return filename
 
     def _generate_cards_for_page(
-            self, content: str, page_num: int, system_prompt: str
+        self, content: str, page_num: int, system_prompt: str
     ) -> List[AnkiCard]:
         """Generate Anki cards for a single page using GPT-4"""
         logger.info(f"Generating cards for page {page_num}")

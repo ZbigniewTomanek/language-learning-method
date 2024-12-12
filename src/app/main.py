@@ -1,9 +1,13 @@
 from pathlib import Path
 from typing import Optional
+from venv import logger
 
-from typer import Typer, Argument
+import typer
+from click import prompt
+from typer import Typer, Argument, Option
 
 from src.app.config import app as config_app
+from src.service.persitence_service import PersistenceService
 from src.service_factory import ServiceFactory, ServiceFactoryConfig
 from src.app import config_manager
 
@@ -29,14 +33,42 @@ def _get_service_factory(llm_name: Optional[str]) -> ServiceFactory:
 
 
 @app.command()
+def book(
+    book_path: Path = Argument(
+        ...,
+        help="The path or name of the book",
+    ),
+    book_name: Optional[str] = Option(
+        ..., help="The name of the book under which it should be saved", prompt=True
+    ),
+) -> None:
+    """
+    Add book to the system
+    """
+    if not book_path.exists():
+        raise FileNotFoundError(f"File {book_path} not found")
+
+    if not book_name:
+        raise ValueError("Book name is required")
+
+    from src.service.persitence_service import PersistenceService
+
+    service_factory = _get_service_factory(None)
+    persistence_service: PersistenceService = service_factory.persistence_service()
+
+    persistence_service.add_book(book_path, book_name)
+    typer.echo(f"Book {book_name} added successfully")
+
+
+@app.command()
 def create_deck_from_book(
-        book_name: str = Argument(..., help="The name of the textbook"),
-        start_page: int = Argument(..., help="The starting page number"),
-        end_page: int = Argument(..., help="The ending page number"),
-        out_dir: Path = Argument(Path("."), help="The directory to save the deck"),
-        llm_name: Optional[str] = Argument(
-            None, help="The name of the LLM to use, if not given the default LLM is used"
-        ),
+    book_name: str = Argument(..., help="The name of the textbook"),
+    start_page: int = Argument(..., help="The starting page number"),
+    end_page: int = Argument(..., help="The ending page number"),
+    out_dir: Path = Argument(Path("."), help="The directory to save the deck"),
+    llm_name: Optional[str] = Argument(
+        None, help="The name of the LLM to use, if not given the default LLM is used"
+    ),
 ) -> None:
     """
     Creates a deck of Anki flashcards out of a parsed textbook.
@@ -51,12 +83,12 @@ def create_deck_from_book(
 
 @app.command()
 def create_deck_from_prompt(
-        prompt: str = Argument(..., help="The prompt to generate the deck from"),
-        num_of_flashcards: int = Argument(25, help="The number of flashcards to generate"),
-        out_dir: Path = Argument(Path("."), help="The directory to save the deck"),
-        llm_name: Optional[str] = Argument(
-            None, help="The name of the LLM to use, if not given the default LLM is used"
-        ),
+    prompt: str = Argument(..., help="The prompt to generate the deck from"),
+    num_of_flashcards: int = Argument(25, help="The number of flashcards to generate"),
+    out_dir: Path = Argument(Path("."), help="The directory to save the deck"),
+    llm_name: Optional[str] = Argument(
+        None, help="The name of the LLM to use, if not given the default LLM is used"
+    ),
 ) -> None:
     """
     Creates a deck of Anki flashcards out of a prompt.
@@ -64,18 +96,20 @@ def create_deck_from_prompt(
     from src.service.deck_from_prompt_service import DeckFromPromptService
 
     service_factory = _get_service_factory(llm_name)
-    deck_from_prompt_service: DeckFromPromptService = service_factory.deck_from_prompt_service()
+    deck_from_prompt_service: DeckFromPromptService = (
+        service_factory.deck_from_prompt_service()
+    )
     deck_from_prompt_service.create_deck(prompt, num_of_flashcards, out_dir)
 
 
 @app.command()
 def extract_exercises(
-        book_name: str = Argument(..., help="The name of the textbook"),
-        start_page: int = Argument(..., help="The starting page number"),
-        end_page: int = Argument(..., help="The ending page number"),
-        llm_name: Optional[str] = Argument(
-            None, help="The name of the LLM to use, if not given the default LLM is used"
-        ),
+    book_name: str = Argument(..., help="The name of the textbook"),
+    start_page: int = Argument(..., help="The starting page number"),
+    end_page: int = Argument(..., help="The ending page number"),
+    llm_name: Optional[str] = Argument(
+        None, help="The name of the LLM to use, if not given the default LLM is used"
+    ),
 ) -> None:
     """
     Extracts exercises from a parsed textbook using the LLM.
@@ -92,29 +126,37 @@ def extract_exercises(
 
 
 @app.command()
-def parse_pdf(
-        pdf_path: Path = Argument(..., help="Path to the PDF file to parse")
-) -> None:
+def parse_pdf(book_name: str) -> None:
     """
     Parse a PDF file into text using pdf-extract-api
     """
     from src.service.pdf_parser import PDFParser
 
     service_factory = _get_service_factory(None)
-    pdf_parser: PDFParser = service_factory.pdf_parser()
 
-    pdf_parser.parse_pdf(pdf_path)
+    pdf_parser: PDFParser = service_factory.pdf_parser()
+    persistence_service: PersistenceService = service_factory.persistence_service()
+    saved_book = persistence_service.get_book(book_name)
+    if saved_book is None:
+        raise ValueError(
+            f"Book with name {book_name} not found",
+            "available books are",
+            persistence_service.list_book_names(),
+        )
+
+    logger.info(f"Starting to parse book {book_name}")
+    pdf_parser.parse_pdf_from_bytes(saved_book.book_content)
 
 
 @app.command()
 def get_exercises_prompts(
-        book_name: str = Argument(..., help="The name of the textbook"),
-        start_page: int = Argument(..., help="The starting page number"),
-        end_page: int = Argument(..., help="The ending page number"),
-        out_dir: Path = Argument(Path("."), help="The directory to save the exercises"),
-        llm_name: Optional[str] = Argument(
-            None, help="The name of the LLM to use, if not given the default LLM is used"
-        ),
+    book_name: str = Argument(..., help="The name of the textbook"),
+    start_page: int = Argument(..., help="The starting page number"),
+    end_page: int = Argument(..., help="The ending page number"),
+    out_dir: Path = Argument(Path("."), help="The directory to save the exercises"),
+    llm_name: Optional[str] = Argument(
+        None, help="The name of the LLM to use, if not given the default LLM is used"
+    ),
 ) -> None:
     """
     Get all the prompts of the exercises

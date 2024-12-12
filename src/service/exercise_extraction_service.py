@@ -41,10 +41,10 @@ Don't write out of character. Only produce what you would say to the student as 
 """
 
     def __init__(
-            self,
-            persistence_service: PersistenceService,
-            llm_service: LLMService,
-            data_dir: Path = DATA_DIR,
+        self,
+        persistence_service: PersistenceService,
+        llm_service: LLMService,
+        data_dir: Path = DATA_DIR,
     ):
         self.data_dir = data_dir
         self.exercises_dir = self.data_dir / "exercises"
@@ -81,7 +81,7 @@ Don't write out of character. Only produce what you would say to the student as 
             self._save_exercises(page_num, exercises, book_name)
 
     def _extract_exercises_from_page(
-            self, content: str, page_num: int
+        self, content: str, page_num: int
     ) -> List[ExtractedExercise]:
         """
         Use the LLM to identify and extract exercises from page content.
@@ -106,7 +106,7 @@ Don't write out of character. Only produce what you would say to the student as 
             return []
 
     def _save_exercises(
-            self, page_num: int, exercises: List[ExtractedExercise], book_path: str
+        self, page_num: int, exercises: List[ExtractedExercise], book_path: str
     ) -> None:
         """
         Save each extracted exercise as a separate markdown file with a Spanish-teacher prompt.
