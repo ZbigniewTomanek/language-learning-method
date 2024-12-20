@@ -410,3 +410,22 @@ class PersistenceService:
                 return True
         except sqlite3.Error:
             return False
+
+    def delete_book_and_connected_data(self, book_name: str) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                DELETE FROM books
+                WHERE name = ?
+                """,
+                (book_name,),
+            )
+            cursor.execute(
+                """
+                DELETE FROM parsed_pages
+                WHERE book_path = ?
+                """,
+                (book_name,),
+            )
+            conn.commit()

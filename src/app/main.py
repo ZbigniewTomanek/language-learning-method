@@ -2,62 +2,16 @@ from pathlib import Path
 from typing import Optional
 from venv import logger
 
-import typer
-from click import prompt
-from typer import Typer, Argument, Option
+from typer import Typer, Argument
 
+from src.app import get_service_factory
 from src.app.config import app as config_app
+from src.app.book import app as book_app
 from src.service.persitence_service import PersistenceService
-from src.service_factory import ServiceFactory, ServiceFactoryConfig
-from src.app import config_manager
 
 app = Typer()
 app.add_typer(config_app, name="config", help="Configuration commands")
-
-
-def _get_service_factory(llm_name: Optional[str]) -> ServiceFactory:
-    settings = config_manager.read_settings()
-
-    if llm_name:
-        llm_config = settings.llms_config.get(llm_name)
-    else:
-        llm_config = settings.llms_config.get(settings.default_llm_name)
-
-    if not llm_config:
-        raise ValueError(f"LLM with name {llm_name} not found")
-
-    service_factory = ServiceFactory(
-        ServiceFactoryConfig(llm_config=llm_config, data_dir=settings.data_dir)
-    )
-    return service_factory
-
-
-@app.command()
-def book(
-    book_path: Path = Argument(
-        ...,
-        help="The path or name of the book",
-    ),
-    book_name: Optional[str] = Option(
-        ..., help="The name of the book under which it should be saved", prompt=True
-    ),
-) -> None:
-    """
-    Add book to the system
-    """
-    if not book_path.exists():
-        raise FileNotFoundError(f"File {book_path} not found")
-
-    if not book_name:
-        raise ValueError("Book name is required")
-
-    from src.service.persitence_service import PersistenceService
-
-    service_factory = _get_service_factory(None)
-    persistence_service: PersistenceService = service_factory.persistence_service()
-
-    persistence_service.add_book(book_path, book_name)
-    typer.echo(f"Book {book_name} added successfully")
+app.add_typer(book_app, name="book", help="Book management commands")
 
 
 @app.command()
@@ -75,7 +29,7 @@ def create_deck_from_book(
     """
     from src.service.deck_service import DeckService
 
-    service_factory = _get_service_factory(llm_name)
+    service_factory = get_service_factory(llm_name)
     deck_service: DeckService = service_factory.deck_service()
 
     deck_service.create_deck(book_name, start_page, end_page, out_dir)
@@ -95,7 +49,7 @@ def create_deck_from_prompt(
     """
     from src.service.deck_from_prompt_service import DeckFromPromptService
 
-    service_factory = _get_service_factory(llm_name)
+    service_factory = get_service_factory(llm_name)
     deck_from_prompt_service: DeckFromPromptService = (
         service_factory.deck_from_prompt_service()
     )
@@ -116,7 +70,7 @@ def extract_exercises(
     """
     from src.service.exercise_extraction_service import ExerciseExtractionService
 
-    service_factory = _get_service_factory(llm_name)
+    service_factory = get_service_factory(llm_name)
     exercise_extraction_service: ExerciseExtractionService = (
         service_factory.exercise_extractor_service()
     )
@@ -132,7 +86,7 @@ def parse_pdf(book_name: str) -> None:
     """
     from src.service.pdf_parser import PDFParser
 
-    service_factory = _get_service_factory(None)
+    service_factory = get_service_factory(None)
 
     pdf_parser: PDFParser = service_factory.pdf_parser()
     persistence_service: PersistenceService = service_factory.persistence_service()
@@ -163,7 +117,7 @@ def get_exercises_prompts(
     """
     from src.service.exercise_builder_service import ExerciseBuilderService
 
-    service_factory = _get_service_factory(llm_name)
+    service_factory = get_service_factory(llm_name)
     exercise_builder_service: ExerciseBuilderService = (
         service_factory.exercise_builder_service()
     )

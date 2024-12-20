@@ -2,10 +2,10 @@ import base64
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Union
-from loguru import logger
+from typing import Dict, Optional
 
 import requests
+from loguru import logger
 
 
 @dataclass
@@ -115,41 +115,16 @@ Formatea la respuesta en markdown o texto sin formato. No escriba nada más
 
     def extract_text(
         self,
-        file_paths: Union[str, List[str]],
+        file_path: str,
         prompt: Optional[str] = None,
         prompt_file: Optional[str] = None,
         storage_filename: Optional[str] = None,
         print_progress: bool = False,
-    ) -> Union[ExtractionResult, List[ExtractionResult]]:
-        """
-        Extract text from one or multiple PDF files
-
-        Args:
-            file_paths: Single file path or list of file paths
-            prompt: Optional prompt for the model
-            prompt_file: Optional path to prompt file
-            storage_filename: Optional storage filename
-            print_progress: Whether to print progress
-
-        Returns:
-            Single ExtractionResult or list of ExtractionResults
-        """
-        logger.debug(f"Extracting text from file(s): {file_paths}")
-        # Handle single file path
-        if isinstance(file_paths, str):
-            return self._process_single_file(
-                file_paths, prompt, prompt_file, storage_filename, print_progress
-            )
-
-        # Handle multiple file paths
-        results = []
-        for file_path in file_paths:
-            result = self._process_single_file(
-                file_path, prompt, prompt_file, storage_filename, print_progress
-            )
-            results.append(result)
-
-        return results
+    ) -> ExtractionResult:
+        logger.debug(f"Extracting text from file {file_path}")
+        return self._process_single_file(
+            file_path, prompt, prompt_file, storage_filename, print_progress
+        )
 
     def _process_single_file(
         self,
@@ -160,104 +135,93 @@ Formatea la respuesta en markdown o texto sin formato. No escriba nada más
         print_progress: bool,
     ) -> ExtractionResult:
         """Process a single file and return its extraction result"""
-        try:
-            # Read prompt file if provided
-            if prompt_file:
-                try:
-                    prompt = Path(prompt_file).read_text()
-                except FileNotFoundError:
-                    return ExtractionResult(
-                        file_path=file_path,
-                        extracted_text=None,
-                        error=f"Prompt file not found: {prompt_file}",
-                    )
-
-            # Try file upload first
-            result = self._upload_file(file_path, prompt, storage_filename)
-
-            # If upload fails, try request method
-            if result is None:
-                result = self._request_file(file_path, prompt, storage_filename)
-
-            # If both methods fail, return error
-            if result is None:
+        # Read prompt file if provided
+        if prompt_file:
+            try:
+                prompt = Path(prompt_file).read_text()
+            except FileNotFoundError:
+                logger.error(f"Prompt file not found: {prompt_file}")
                 return ExtractionResult(
                     file_path=file_path,
                     extracted_text=None,
-                    error="Failed to process file using both upload and request methods",
+                    error=f"Prompt file not found: {prompt_file}",
                 )
 
-            # If we got direct text response
-            if result.get("text"):
-                return ExtractionResult(
-                    file_path=file_path, extracted_text=result["text"]
-                )
+        # Try file upload first
+        result = self._upload_file(file_path, prompt, storage_filename)
 
-            # If we got a task ID, wait for the result
-            task_id = result.get("task_id")
-            if task_id:
-                text_result = self._get_result(task_id, print_progress)
-                return ExtractionResult(
-                    file_path=file_path, extracted_text=text_result, task_id=task_id
-                )
+        # If upload fails, try request method
+        if result is None:
+            result = self._request_file(file_path, prompt, storage_filename)
 
-        except Exception as e:
+        # If both methods fail, return error
+        if result is None:
             return ExtractionResult(
-                file_path=file_path, extracted_text=None, error=str(e)
+                file_path=file_path,
+                extracted_text=None,
+                error="Failed to process file using both upload and request methods",
             )
+
+        # If we got direct text response
+        if result.get("text"):
+            return ExtractionResult(file_path=file_path, extracted_text=result["text"])
+
+        # If we got a task ID, wait for the result
+        task_id = result.get("task_id")
+        if task_id:
+            text_result = self._get_result(task_id, print_progress)
+            return ExtractionResult(
+                file_path=file_path, extracted_text=text_result, task_id=task_id
+            )
+
+        raise ValueError("Invalid response from OCR service")
 
     def _upload_file(
         self, file_path: str, prompt: Optional[str], storage_filename: Optional[str]
     ) -> Optional[Dict]:
         """Upload file using multipart form data"""
-        try:
-            with open(file_path, "rb") as f:
-                files = {"file": f}
-                data = {
-                    "ocr_cache": self.ocr_cache,
-                    "model": self.model,
-                    "strategy": self.strategy,
-                    "storage_profile": self.storage_profile,
-                }
+        with open(file_path, "rb") as f:
+            files = {"file": f}
+            data = {
+                "ocr_cache": self.ocr_cache,
+                "model": self.model,
+                "strategy": self.strategy,
+                "storage_profile": self.storage_profile,
+            }
 
-                if storage_filename:
-                    data["storage_filename"] = storage_filename
-                if prompt:
-                    data["prompt"] = self._PROMPT
+            if storage_filename:
+                data["storage_filename"] = storage_filename
+            if prompt:
+                data["prompt"] = self._PROMPT
 
-                response = requests.post(self.upload_url, files=files, data=data)
-                if response.status_code == 200:
-                    return response.json()
-                return None
-        except Exception:
+            response = requests.post(self.upload_url, files=files, data=data)
+            if response.status_code == 200:
+                return response.json()
             return None
 
     def _request_file(
         self, file_path: str, prompt: Optional[str], storage_filename: Optional[str]
     ) -> Optional[Dict]:
         """Upload file using base64 encoded request"""
-        try:
-            with open(file_path, "rb") as f:
-                file_content = base64.b64encode(f.read()).decode("utf-8")
+        with open(file_path, "rb") as f:
+            file_content = base64.b64encode(f.read()).decode("utf-8")
 
-                data = {
-                    "ocr_cache": self.ocr_cache,
-                    "model": self.model,
-                    "strategy": self.strategy,
-                    "storage_profile": self.storage_profile,
-                    "file": file_content,
-                }
+            data = {
+                "ocr_cache": self.ocr_cache,
+                "model": self.model,
+                "strategy": self.strategy,
+                "storage_profile": self.storage_profile,
+                "file": file_content,
+            }
 
-                if storage_filename:
-                    data["storage_filename"] = storage_filename
-                if prompt:
-                    data["prompt"] = self._PROMPT
+            if storage_filename:
+                data["storage_filename"] = storage_filename
+            if prompt:
+                data["prompt"] = self._PROMPT
 
-                response = requests.post(self.request_url, json=data)
-                if response.status_code == 200:
-                    return response.json()
-                return None
-        except Exception:
+            response = requests.post(self.request_url, json=data)
+            if response.status_code == 200:
+                return response.json()
             return None
 
     def _get_result(self, task_id: str, print_progress: bool) -> Optional[str]:

@@ -5,6 +5,7 @@ from pathlib import Path
 from loguru import logger
 
 from src.constants import DATA_DIR
+from src.error import LanguageLearningMethodException
 from src.service.pdf_splitter import PDFSplitter
 from src.service.persitence_service import PersistenceService, ParsedPage
 from src.service.text_extraction_service import TextExtractionService
@@ -41,6 +42,10 @@ class PDFParser:
             if not self.persistence_service.is_page_parsed(book_name, page_num):
                 start_time = datetime.now()
                 result = self.text_extraction_service.extract_text(page)
+                if result.error:
+                    raise LanguageLearningMethodException(
+                        f"Error extracting text from page {page_num}: {result.error}"
+                    )
                 end_time = datetime.now()
                 logger.info(
                     f"Extracted text from page {page_num} in {end_time - start_time}"

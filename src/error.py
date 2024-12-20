@@ -1,0 +1,2 @@
+class LanguageLearningMethodException(Exception):
+    pass

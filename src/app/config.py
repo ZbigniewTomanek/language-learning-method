@@ -109,7 +109,7 @@ def get_settings_dir() -> None:
 
 @app.command()
 def set_logging_level(
-    logging_level: str = typer.Option(
+    level: str = typer.Option(
         ...,
         prompt=True,
         help="Logging level. E.g. DEBUG, INFO, WARNING, ERROR, CRITICAL",
@@ -119,6 +119,6 @@ def set_logging_level(
     Set the logging level.
     """
     settings = config_manager.read_settings()
-    settings.logger_level = logging_level
+    settings.logger_level = level
     config_manager.write_settings(settings)
-    typer.echo(f"Logging level set to {logging_level}")
+    typer.echo(f"Logging level set to {level}")
