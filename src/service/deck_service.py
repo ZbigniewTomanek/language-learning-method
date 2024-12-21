@@ -11,7 +11,7 @@ from src.service.persitence_service import PersistenceService
 
 
 class DeckService:
-    _WORDS_PROMPT = """You are a Spanish language education expert creating vocabulary-focused Anki flashcards. For each new word or phrase in the text, create comprehensive cards that ensure deep understanding and retention. Focus on:
+    _WORDS_PROMPT = """You are a language education expert creating vocabulary-focused Anki flashcards. For each new word or phrase in the text, create comprehensive cards that ensure deep understanding and retention. Focus on:
 
 1. Word Context:
    - How the word is used in real situations
@@ -40,7 +40,7 @@ class DeckService:
    - Idiomatic usage
 
 For each word, create multiple cards types:
-- Basic recall (Spanish -> English, English -> Spanish)
+- Basic recall (translation to English)
 - Usage in context (fill-in-the-blank sentences)
 - Collocation practice
 - Picture/situation association
@@ -51,11 +51,10 @@ Ensure cards include:
 - Relevant parts of speech
 - Common mistakes to avoid
 - Usage level (beginner/intermediate/advanced)
-
 """
 
-    _GRAMMAR_PROMPT = f"""You are a Spanish language education expert creating Anki flashcards. 
-Create comprehensive cards that go beyond simple translations and help students deeply understand Spanish language concepts. 
+    _GRAMMAR_PROMPT = f"""You are a language education expert creating Anki flashcards. 
+Create comprehensive cards that go beyond simple translations and help students deeply understand English language concepts. 
 Focus on:
 
 1. Grammar patterns and their usage
@@ -122,7 +121,7 @@ For each concept, create multiple cards that approach it from different angles.
         """Generate Anki cards for a single page using GPT-4"""
         logger.info(f"Generating cards for page {page_num}")
 
-        user_prompt = f"""Create Anki cards for this Spanish textbook page content:
+        user_prompt = f"""Create Anki cards for this English textbook page content:
 
 {content}
 

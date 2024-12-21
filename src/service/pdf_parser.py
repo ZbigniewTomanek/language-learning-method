@@ -21,19 +21,7 @@ class PDFParser:
         self.pdf_splitter = PDFSplitter()
         self.text_extraction_service = TextExtractionService()
 
-    def parse_pdf_from_bytes(self, pdf_bytes: bytes) -> None:
-        tmp_dir = tempfile.gettempdir()
-        pdf_path = Path(tmp_dir) / "temp.pdf"
-        with open(pdf_path, "wb") as f:
-            f.write(pdf_bytes)
-
-        try:
-            self.parse_pdf(pdf_path)
-        finally:
-            pdf_path.unlink()
-
-    def parse_pdf(self, pdf_path: Path) -> None:
-        book_name = pdf_path.stem
+    def parse_pdf(self, book_name: str, pdf_path: Path) -> None:
         pages = self.pdf_splitter.split_pdf(pdf_path)
         logger.info(f"Split PDF into {len(pages)} pages")
 
@@ -48,7 +36,7 @@ class PDFParser:
                     )
                 end_time = datetime.now()
                 logger.info(
-                    f"Extracted text from page {page_num} in {end_time - start_time}"
+                    f"Extracted text from page {page_num + 1} in {end_time - start_time}"
                 )
                 if result.extracted_text:
                     parsed_page = ParsedPage(
@@ -61,18 +49,3 @@ class PDFParser:
                     self.persistence_service.store_parsed_page(parsed_page)
             else:
                 logger.info(f"Page {page_num} already parsed")
-
-
-def main() -> None:
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Parse a PDF file")
-    parser.add_argument("pdf_path", type=str, help="Path to the PDF file to parse")
-    args = parser.parse_args()
-
-    pdf_parser = PDFParser()
-    pdf_parser.parse_pdf(Path(args.pdf_path))
-
-
-if __name__ == "__main__":
-    main()

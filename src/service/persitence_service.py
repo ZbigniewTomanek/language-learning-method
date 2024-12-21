@@ -3,23 +3,38 @@ import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Any
 
+from langchain.smith.evaluation.runner_utils import logger
 from pydantic import BaseModel
 
 from src.constants import DATA_DIR
+from src.error import LanguageLearningMethodException
+
+
+class TableNames(Enum):
+    PARSED_PAGES = "parsed_pages"
+    EXERCISES = "exercises"
+    EXERCISE_QUESTIONS = "exercise_questions"
+    BOOKS = "books"
 
 
 @dataclass
 class ParsedPage:
-    """Data class to store parsed page information"""
-
     book_path: str
     page_number: int
     content: str
     parsed_at: datetime
     extraction_task_id: Optional[str] = None
+
+    def to_stdout_dict(self) -> dict[str, Any]:
+        return {
+            "book_path": self.book_path,
+            "page_number": self.page_number,
+            "parsed_at": self.parsed_at,
+        }
 
 
 class ExtractedExercise(BaseModel):
@@ -30,15 +45,6 @@ class ExtractedExercise(BaseModel):
 
 class ExtractedExercises(BaseModel):
     exercises: List[ExtractedExercise]
-
-
-@dataclass
-class ParsedPage:
-    book_path: str
-    page_number: int
-    content: str
-    parsed_at: datetime
-    extraction_task_id: Optional[str] = None
 
 
 @dataclass
@@ -59,14 +65,14 @@ class Book:
     book_content: bytes
 
     @contextmanager
-    def temp_pdf(self):
+    def as_temp_pdf(self):
         tmp_dir = tempfile.gettempdir()
-        pdf_path = Path(tmp_dir) / "temp.pdf"
+        pdf_path = Path(tmp_dir) / f"{self.name}.pdf"
         with open(pdf_path, "wb") as f:
             f.write(self.book_content)
 
         try:
-            yield self
+            yield pdf_path
         finally:
             pdf_path.unlink(missing_ok=True)
 
@@ -78,354 +84,266 @@ class PersistenceService:
 
     def _init_db(self) -> None:
         """Initialize the database and create required tables if they don't exist"""
+        create_parsed_pages = f"""
+            CREATE TABLE IF NOT EXISTS {TableNames.PARSED_PAGES.value} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                book_path TEXT NOT NULL,
+                page_number INTEGER NOT NULL,
+                content TEXT NOT NULL,
+                parsed_at TIMESTAMP NOT NULL,
+                extraction_task_id TEXT,
+                UNIQUE(book_path, page_number)
+            )
+        """
+
+        create_exercises = f"""
+            CREATE TABLE IF NOT EXISTS {TableNames.EXERCISES.value} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                book_path TEXT NOT NULL,
+                page_number INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                instructions TEXT NOT NULL,
+                extracted_at TIMESTAMP NOT NULL,
+                FOREIGN KEY(book_path, page_number) 
+                REFERENCES {TableNames.PARSED_PAGES.value}(book_path, page_number)
+            )
+        """
+
+        create_exercise_questions = f"""
+            CREATE TABLE IF NOT EXISTS {TableNames.EXERCISE_QUESTIONS.value} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exercise_id INTEGER NOT NULL,
+                question TEXT NOT NULL,
+                question_order INTEGER NOT NULL,
+                FOREIGN KEY(exercise_id) REFERENCES {TableNames.EXERCISES.value}(id)
+            )
+        """
+
+        create_books = f"""
+            CREATE TABLE IF NOT EXISTS {TableNames.BOOKS.value} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                book_content_base64 TEXT NOT NULL,
+                date_added TIMESTAMP NOT NULL
+            )
+        """
+
+        for query in [
+            create_parsed_pages,
+            create_exercises,
+            create_exercise_questions,
+            create_books,
+        ]:
+            self.execute_query(query, ())
+
+    def execute_query(self, query: str, params: tuple) -> list[tuple]:
+        logger.debug(f"Executing query: {query} with params: {params}")
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            # Existing parsed_pages table
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS parsed_pages (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    book_path TEXT NOT NULL,
-                    page_number INTEGER NOT NULL,
-                    content TEXT NOT NULL,
-                    parsed_at TIMESTAMP NOT NULL,
-                    extraction_task_id TEXT,
-                    UNIQUE(book_path, page_number)
-                )
-            """
-            )
-
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS exercises (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    book_path TEXT NOT NULL,
-                    page_number INTEGER NOT NULL,
-                    title TEXT NOT NULL,
-                    instructions TEXT NOT NULL,
-                    extracted_at TIMESTAMP NOT NULL,
-                    FOREIGN KEY(book_path, page_number) REFERENCES parsed_pages(book_path, page_number)
-                )
-            """
-            )
-
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS exercise_questions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    exercise_id INTEGER NOT NULL,
-                    question TEXT NOT NULL,
-                    question_order INTEGER NOT NULL,
-                    FOREIGN KEY(exercise_id) REFERENCES exercises(id)
-                )
-            """
-            )
-
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS books (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    book_content_base64 TEXT NOT NULL,
-                    date_added TIMESTAMP NOT NULL
-                )
-                """
-            )
+            cursor.execute(query, params)
             conn.commit()
+            return cursor.fetchall()
 
     def add_book(self, book_path: Path, book_name: str) -> Book:
         with open(book_path, "rb") as f:
             book_content = f.read()
         book_content_base64 = book_content.hex()
         book = Book(name=book_name, added_at=datetime.now(), book_content=book_content)
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO books (name, book_content_base64, date_added)
-                VALUES (?, ?, ?)
-                """,
-                (book_name, book_content_base64, book.added_at.isoformat()),
-            )
-            conn.commit()
+
+        query = f"""
+            INSERT INTO {TableNames.BOOKS.value} (name, book_content_base64, date_added)
+            VALUES (?, ?, ?)
+        """
+        self.execute_query(
+            query, (book_name, book_content_base64, book.added_at.isoformat())
+        )
         return book
 
     def get_book(self, book_name: str) -> Optional[Book]:
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT name, book_content_base64, date_added
-                FROM books
-                WHERE name = ?
-                """,
-                (book_name,),
+        query = f"""
+            SELECT name, book_content_base64, date_added
+            FROM {TableNames.BOOKS.value}
+            WHERE name = ?
+        """
+        rows = self.execute_query(query, (book_name,))
+        if rows:
+            row = rows[0]
+            return Book(
+                name=row[0],
+                added_at=datetime.fromisoformat(row[2]),
+                book_content=bytes.fromhex(row[1]),
             )
-            row = cursor.fetchone()
-            if row:
-                return Book(
-                    name=row[0],
-                    added_at=datetime.fromisoformat(row[2]),
-                    book_content=bytes.fromhex(row[1]),
-                )
         return None
 
     def list_book_names(self) -> list[str]:
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT name
-                FROM books
-                """
-            )
-            return [row[0] for row in cursor.fetchall()]
+        query = f"""
+            SELECT name
+            FROM {TableNames.BOOKS.value}
+        """
+        rows = self.execute_query(query, ())
+        return [row[0] for row in rows]
 
     def store_exercise(self, exercise: StoredExercise) -> int:
         """Store an exercise and its questions in the database"""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
+        insert_exercise = f"""
+            INSERT INTO {TableNames.EXERCISES.value}
+            (book_path, page_number, title, instructions, extracted_at)
+            VALUES (?, ?, ?, ?, ?)
+        """
+        rows = self.execute_query(
+            insert_exercise,
+            (
+                exercise.book_path,
+                exercise.page_number,
+                exercise.title,
+                exercise.instructions,
+                exercise.extracted_at.isoformat(),
+            ),
+        )
+        exercise_id = rows[0][0] if rows else None
 
-            # Insert exercise
-            cursor.execute(
-                """
-                INSERT INTO exercises 
-                (book_path, page_number, title, instructions, extracted_at)
-                VALUES (?, ?, ?, ?, ?)
-            """,
-                (
-                    exercise.book_path,
-                    exercise.page_number,
-                    exercise.title,
-                    exercise.instructions,
-                    exercise.extracted_at.isoformat(),
-                ),
-            )
-
-            exercise_id = cursor.lastrowid
-
-            # Insert questions
+        if exercise_id is not None:
+            insert_question = f"""
+                INSERT INTO {TableNames.EXERCISE_QUESTIONS.value}
+                (exercise_id, question, question_order)
+                VALUES (?, ?, ?)
+            """
             for i, question in enumerate(exercise.questions):
-                cursor.execute(
-                    """
-                    INSERT INTO exercise_questions 
-                    (exercise_id, question, question_order)
-                    VALUES (?, ?, ?)
-                """,
-                    (exercise_id, question, i),
-                )
+                self.execute_query(insert_question, (exercise_id, question, i))
 
-            conn.commit()
-            return exercise_id
+        if exercise_id is None:
+            raise LanguageLearningMethodException(
+                "Error storing exercise - no exercise ID"
+            )
+        return exercise_id
 
     def get_exercises(
         self, book_path: str, page_number: Optional[int] = None
     ) -> List[StoredExercise]:
-        """Retrieve exercises for a book, optionally filtered by page number"""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
+        base_query = f"""
+            SELECT e.id, e.book_path, e.page_number, e.title, e.instructions, e.extracted_at
+            FROM {TableNames.EXERCISES.value} e
+            WHERE e.book_path = ?
+        """
+        params = [book_path]
 
-            query = """
-                SELECT e.id, e.book_path, e.page_number, e.title, e.instructions, e.extracted_at
-                FROM exercises e
-                WHERE e.book_path = ?
+        if page_number is not None:
+            base_query += " AND e.page_number = ?"
+            params.append(page_number)
+
+        exercise_rows = self.execute_query(base_query, tuple(params))
+        exercises = []
+
+        for row in exercise_rows:
+            question_query = f"""
+                SELECT question FROM {TableNames.EXERCISE_QUESTIONS.value}
+                WHERE exercise_id = ?
+                ORDER BY question_order
             """
-            params = [book_path]
+            question_rows = self.execute_query(question_query, (row[0],))
+            questions = [q[0] for q in question_rows]
 
-            if page_number is not None:
-                query += " AND e.page_number = ?"
-                params.append(page_number)
-
-            cursor.execute(query, params)
-            exercises = []
-
-            for row in cursor.fetchall():
-                # Get questions for this exercise
-                cursor.execute(
-                    """
-                    SELECT question FROM exercise_questions
-                    WHERE exercise_id = ?
-                    ORDER BY question_order
-                """,
-                    (row[0],),
+            exercises.append(
+                StoredExercise(
+                    id=row[0],
+                    book_path=row[1],
+                    page_number=row[2],
+                    title=row[3],
+                    instructions=row[4],
+                    questions=questions,
+                    extracted_at=datetime.fromisoformat(row[5]),
                 )
+            )
 
-                questions = [q[0] for q in cursor.fetchall()]
-
-                exercises.append(
-                    StoredExercise(
-                        id=row[0],
-                        book_path=row[1],
-                        page_number=row[2],
-                        title=row[3],
-                        instructions=row[4],
-                        questions=questions,
-                        extracted_at=datetime.fromisoformat(row[5]),
-                    )
-                )
-
-            return exercises
+        return exercises
 
     def store_parsed_page(self, parsed_page: ParsedPage) -> bool:
-        """
-        Store a parsed page in the database
-
-        Args:
-            parsed_page: ParsedPage object containing the page information
-
-        Returns:
-            bool: True if storage was successful, False otherwise
-        """
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    INSERT OR REPLACE INTO parsed_pages 
-                    (book_path, page_number, content, parsed_at, extraction_task_id)
-                    VALUES (?, ?, ?, ?, ?)
-                """,
-                    (
-                        str(parsed_page.book_path),
-                        parsed_page.page_number,
-                        parsed_page.content,
-                        parsed_page.parsed_at.isoformat(),
-                        parsed_page.extraction_task_id,
-                    ),
-                )
-                conn.commit()
-                return True
+            query = f"""
+                INSERT OR REPLACE INTO {TableNames.PARSED_PAGES.value}
+                (book_path, page_number, content, parsed_at, extraction_task_id)
+                VALUES (?, ?, ?, ?, ?)
+            """
+            self.execute_query(
+                query,
+                (
+                    str(parsed_page.book_path),
+                    parsed_page.page_number,
+                    parsed_page.content,
+                    parsed_page.parsed_at.isoformat(),
+                    parsed_page.extraction_task_id,
+                ),
+            )
+            return True
         except sqlite3.Error:
             return False
 
     def is_page_parsed(self, book_name: str, page_number: int) -> bool:
+        query = f"""
+            SELECT COUNT(*) FROM {TableNames.PARSED_PAGES.value}
+            WHERE book_path = ? AND page_number = ?
         """
-        Check if a specific page of a book has already been parsed
-
-        Args:
-            book_namePath to the book file
-            page_number: Page number to check
-
-        Returns:
-            bool: True if the page has been parsed, False otherwise
-        """
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT COUNT(*) FROM parsed_pages 
-                WHERE book_path = ? AND page_number = ?
-            """,
-                (str(book_name), page_number),
-            )
-            return cursor.fetchone()[0] > 0
+        rows = self.execute_query(query, (str(book_name), page_number))
+        return rows[0][0] > 0
 
     def get_parsed_page(self, book_name: str, page_number: int) -> Optional[ParsedPage]:
+        query = f"""
+            SELECT book_path, page_number, content, parsed_at, extraction_task_id
+            FROM {TableNames.PARSED_PAGES.value}
+            WHERE book_path = ? AND page_number = ?
         """
-        Retrieve a parsed page from the database
+        rows = self.execute_query(query, (str(book_name), page_number))
 
-        Args:
-            book_namePath to the book file
-            page_number: Page number to retrieve
-
-        Returns:
-            Optional[ParsedPage]: ParsedPage object if found, None otherwise
-        """
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT book_path, page_number, content, parsed_at, extraction_task_id 
-                FROM parsed_pages 
-                WHERE book_path = ? AND page_number = ?
-            """,
-                (str(book_name), page_number),
+        if rows:
+            row = rows[0]
+            return ParsedPage(
+                book_path=row[0],
+                page_number=row[1],
+                content=row[2],
+                parsed_at=datetime.fromisoformat(row[3]),
+                extraction_task_id=row[4],
             )
-
-            row = cursor.fetchone()
-            if row:
-                return ParsedPage(
-                    book_path=row[0],
-                    page_number=row[1],
-                    content=row[2],
-                    parsed_at=datetime.fromisoformat(row[3]),
-                    extraction_task_id=row[4],
-                )
         return None
 
     def get_all_parsed_pages(self, book_name: str) -> List[ParsedPage]:
+        query = f"""
+            SELECT book_path, page_number, content, parsed_at, extraction_task_id
+            FROM {TableNames.PARSED_PAGES.value}
+            WHERE book_path = ?
+            ORDER BY page_number
         """
-        Retrieve all parsed pages for a specific book
+        rows = self.execute_query(query, (str(book_name),))
 
-        Args:
-            book_namePath to the book file
-
-        Returns:
-            List[ParsedPage]: List of ParsedPage objects
-        """
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT book_path, page_number, content, parsed_at, extraction_task_id 
-                FROM parsed_pages 
-                WHERE book_path = ?
-                ORDER BY page_number
-            """,
-                (str(book_name),),
+        return [
+            ParsedPage(
+                book_path=row[0],
+                page_number=row[1],
+                content=row[2],
+                parsed_at=datetime.fromisoformat(row[3]),
+                extraction_task_id=row[4],
             )
-
-            return [
-                ParsedPage(
-                    book_path=row[0],
-                    page_number=row[1],
-                    content=row[2],
-                    parsed_at=datetime.fromisoformat(row[3]),
-                    extraction_task_id=row[4],
-                )
-                for row in cursor.fetchall()
-            ]
+            for row in rows
+        ]
 
     def clear_book_pages(self, book_name: str) -> bool:
-        """
-        Delete all parsed pages for a specific book
-
-        Args:
-            book_namePath to the book file
-
-        Returns:
-            bool: True if deletion was successful, False otherwise
-        """
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    DELETE FROM parsed_pages 
-                    WHERE book_path = ?
-                """,
-                    (str(book_name),),
-                )
-                conn.commit()
-                return True
+            query = f"""
+                DELETE FROM {TableNames.PARSED_PAGES.value}
+                WHERE book_path = ?
+            """
+            self.execute_query(query, (str(book_name),))
+            return True
         except sqlite3.Error:
             return False
 
     def delete_book_and_connected_data(self, book_name: str) -> None:
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                DELETE FROM books
-                WHERE name = ?
-                """,
-                (book_name,),
-            )
-            cursor.execute(
-                """
-                DELETE FROM parsed_pages
-                WHERE book_path = ?
-                """,
-                (book_name,),
-            )
-            conn.commit()
+        delete_book = f"""
+            DELETE FROM {TableNames.BOOKS.value}
+            WHERE name = ?
+        """
+        delete_pages = f"""
+            DELETE FROM {TableNames.PARSED_PAGES.value}
+            WHERE book_path = ?
+        """
+        self.execute_query(delete_book, (book_name,))
+        self.execute_query(delete_pages, (book_name,))

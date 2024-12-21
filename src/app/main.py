@@ -99,7 +99,8 @@ def parse_pdf(book_name: str) -> None:
         )
 
     logger.info(f"Starting to parse book {book_name}")
-    pdf_parser.parse_pdf_from_bytes(saved_book.book_content)
+    with saved_book.as_temp_pdf() as pdf_path:
+        pdf_parser.parse_pdf(book_name=book_name, pdf_path=pdf_path)
 
 
 @app.command()

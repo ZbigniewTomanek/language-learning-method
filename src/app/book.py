@@ -1,11 +1,12 @@
+import json
 from pathlib import Path
 from typing import Optional
-from venv import logger
 
 import typer
 from typer import Typer, Argument, Option
 
 from src.app import get_service_factory
+from src.enums import OutputFormat
 from src.service.persitence_service import PersistenceService
 
 app = Typer()
@@ -34,7 +35,7 @@ def add(
     persistence_service: PersistenceService = service_factory.persistence_service()
 
     persistence_service.add_book(book_path, book_name)
-    typer.echo(f"Book {book_name} added successfully")
+    typer.echo(f"✅ {book_name} added successfully")
 
 
 @app.command()
@@ -79,29 +80,6 @@ def extract_exercises(
     exercise_extraction_service.extract_exercises(
         book_name=book_name, start_page=start_page, end_page=end_page
     )
-
-
-@app.command()
-def parse_pdf(book_name: str) -> None:
-    """
-    Parse a PDF file into text using pdf-extract-api
-    """
-    from src.service.pdf_parser import PDFParser
-
-    service_factory = get_service_factory(None)
-
-    pdf_parser: PDFParser = service_factory.pdf_parser()
-    persistence_service: PersistenceService = service_factory.persistence_service()
-    saved_book = persistence_service.get_book(book_name)
-    if saved_book is None:
-        raise ValueError(
-            f"Book with name {book_name} not found",
-            "available books are",
-            persistence_service.list_book_names(),
-        )
-
-    logger.info(f"Starting to parse book {book_name}")
-    pdf_parser.parse_pdf_from_bytes(saved_book.book_content)
 
 
 @app.command()
@@ -156,10 +134,56 @@ def describe(
     parsed_pages = persistence_service.get_all_parsed_pages(book_name)
     typer.echo(f"Name: {book_.name}")
     typer.echo(f"Pages: {len(parsed_pages)}")
-    for i, page in enumerate(parsed_pages, 1):
-        typer.echo(f"Page {i}")
-        typer.echo(page.content)
-        typer.echo("\n\n")
+
+
+@app.command()
+def show_pages(
+    book_name: str = Argument(..., help="The name of the book"),
+    start_page_num: int = Option(1, help="The starting page number"),
+    number_of_pages: int = Option(10, help="The number of pages to show"),
+    format: OutputFormat = Option("md", help="The format of the output"),
+) -> None:
+    """
+    Show parsed pages of a book.
+
+    E.g. Show pages from 10 to 20 of a `life-vision` book:
+    > show-pages "life-vision" --offset 10 --limit 20 --format md
+    """
+    service_factory = get_service_factory(None)
+    persistence_service: PersistenceService = service_factory.persistence_service()
+    book = persistence_service.get_book(book_name)
+    if not book:
+        raise ValueError(f"Book with name {book_name} not found")
+
+    book_pages = persistence_service.get_all_parsed_pages(book_name)
+    if len(book_pages) <= 0:
+        typer.echo("No parsed pages found", err=True)
+        return
+
+    if number_of_pages < 1:
+        raise ValueError("Number of pages must be greater than 0")
+
+    if start_page_num <= 0 or start_page_num > len(book_pages):
+        raise ValueError(f"Invalid start page number {start_page_num}")
+
+    if len(book_pages) < start_page_num + number_of_pages:
+        number_of_pages = len(book_pages) - start_page_num
+
+    book_pages.sort(key=lambda page: page.page_number)
+    pages = book_pages[start_page_num - 1 : start_page_num + number_of_pages - 1]
+    if format == OutputFormat.json:
+        typer.echo(
+            json.dumps(
+                [page.to_stdout_dict() for page in pages],
+            )
+        )
+    elif format == OutputFormat.md:
+        for page in pages:
+            typer.echo(f"== Page {page.page_number}")
+            typer.echo(page.content)
+            typer.echo("\n" + "-" * 80 + "\n")
+    else:
+        raise NotImplementedError(f"Output format {format} not implemented")
 
 
 @app.command()
@@ -171,8 +195,17 @@ def clear_pages(
     """
     service_factory = get_service_factory(None)
     persistence_service: PersistenceService = service_factory.persistence_service()
+    book = persistence_service.get_book(book_name)
+    if not book:
+        raise ValueError(f"Book with name {book_name} not found")
+
+    book_pages = persistence_service.get_all_parsed_pages(book_name)
+    if len(book_pages) == 0:
+        typer.echo(f"No parsed pages found for {book_name}")
+        return
+
     persistence_service.clear_book_pages(book_name)
-    typer.echo(f"All parsed pages of {book_name} deleted successfully")
+    typer.echo(f"✅ parsed pages of {book_name} deleted successfully")
 
 
 @app.command()
@@ -185,4 +218,4 @@ def delete(
     service_factory = get_service_factory(None)
     persistence_service: PersistenceService = service_factory.persistence_service()
     persistence_service.delete_book_and_connected_data(book_name)
-    typer.echo(f"Book {book_name} deleted successfully")
+    typer.echo(f"✅ {book_name} deleted successfully")
