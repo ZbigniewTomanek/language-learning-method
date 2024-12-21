@@ -38,26 +38,6 @@ def add(
     typer.echo(f"✅ {book_name} added successfully")
 
 
-@app.command()
-def create_deck(
-    book_name: str = Argument(..., help="The name of the textbook"),
-    start_page: int = Argument(..., help="The starting page number"),
-    end_page: int = Argument(..., help="The ending page number"),
-    out_dir: Path = Argument(Path("."), help="The directory to save the deck"),
-    llm_name: Optional[str] = Argument(
-        None, help="The name of the LLM to use, if not given the default LLM is used"
-    ),
-) -> None:
-    """
-    Creates a deck of Anki flashcards out of a parsed textbook.
-    """
-    from src.service.deck_service import DeckService
-
-    service_factory = get_service_factory(llm_name)
-    deck_service: DeckService = service_factory.deck_service()
-
-    deck_service.create_deck(book_name, start_page, end_page, out_dir)
-
 
 @app.command()
 def extract_exercises(

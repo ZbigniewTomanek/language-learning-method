@@ -21,7 +21,7 @@ class DeckService:
 2. Word Relationships:
    - Related words (synonyms, antonyms)
    - Word families (derivations, common prefixes/suffixes)
-   - False friends with English
+   - False friends 
    
 3. Usage Patterns:
    - Example sentences showing different contexts
@@ -40,7 +40,7 @@ class DeckService:
    - Idiomatic usage
 
 For each word, create multiple cards types:
-- Basic recall (translation to English)
+- Basic recall (translation to desired language)
 - Usage in context (fill-in-the-blank sentences)
 - Collocation practice
 - Picture/situation association
@@ -54,7 +54,7 @@ Ensure cards include:
 """
 
     _GRAMMAR_PROMPT = f"""You are a language education expert creating Anki flashcards. 
-Create comprehensive cards that go beyond simple translations and help students deeply understand English language concepts. 
+Create comprehensive cards that go beyond simple translations and help students deeply understand language concepts. 
 Focus on:
 
 1. Grammar patterns and their usage
@@ -75,7 +75,41 @@ For each concept, create multiple cards that approach it from different angles.
         self.persistence_service = persistence_service
         self.llm_service = llm_service
 
-    def create_deck(
+    def create_deck(self, book_name: str, start_page: int, end_page: int, out_dir: Path, system_prompt: str) -> str:
+        """
+        Create an Anki deck from specified pages of a textbook
+        """
+        logger.info(
+            f"Starting deck creation from {book_name}, pages {start_page}-{end_page}"
+        )
+        all_cards = []
+
+        for page_num in range(start_page, end_page + 1):
+            logger.info(f"Processing page {page_num}")
+            page = self.persistence_service.get_parsed_page(book_name, page_num)
+            if not page:
+                logger.info(f"No content for page {page_num}, skipping...")
+                continue
+
+            cards = self._generate_cards_for_page(
+                page.content, page_num, system_prompt
+            )
+            all_cards.extend(cards)
+
+        if not all_cards:
+            raise ValueError("No cards generated for the specified pages")
+
+        book_name = os.path.splitext(os.path.basename(book_name))[0]
+        filename = f"deck_{book_name}_{start_page}-{end_page}.csv"
+        output_file = out_dir / book_name / filename
+        if not output_file.parent.exists():
+            output_file.parent.mkdir(parents=True)
+
+        self._save_to_csv(output_file, all_cards)
+        logger.info(f"Deck created and saved to {filename}")
+        return filename
+
+    def default_create_deck(
         self, book_name: str, start_page: int, end_page: int, out_dir: Path
     ) -> str:
         """
@@ -121,7 +155,7 @@ For each concept, create multiple cards that approach it from different angles.
         """Generate Anki cards for a single page using GPT-4"""
         logger.info(f"Generating cards for page {page_num}")
 
-        user_prompt = f"""Create Anki cards for this English textbook page content:
+        user_prompt = f"""Create Anki cards for this textbook page content:
 
 {content}
 
