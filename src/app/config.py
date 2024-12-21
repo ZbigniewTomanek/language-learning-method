@@ -10,17 +10,17 @@ app = typer.Typer()
 
 @app.command()
 def add_llm(
-    llm_name: str = typer.Option(
-        ..., prompt=True, help="Name under which the LLM will be stored"
-    ),
-    llm_class_path: str = typer.Option(
-        ..., prompt=True, help="Class path of the LLM. E.g. langchain_openai.ChatOpenAI"
-    ),
-    llm_kwargs: str = typer.Option(
-        ...,
-        prompt=True,
-        help="Keyword arguments to pass on the llm init passed as json",
-    ),
+        llm_name: str = typer.Option(
+            ..., prompt=True, help="Name under which the LLM will be stored"
+        ),
+        llm_class_path: str = typer.Option(
+            ..., prompt=True, help="Class path of the LLM. E.g. langchain_openai.ChatOpenAI"
+        ),
+        llm_kwargs: str = typer.Option(
+            ...,
+            prompt=True,
+            help="Keyword arguments to pass on the llm init passed as json",
+        ),
 ) -> None:
     """
     Add a new LLM configuration which then can be used in other commands.
@@ -42,7 +42,7 @@ def add_llm(
 
 @app.command()
 def remove_llm(
-    llm_name: str = typer.Option(..., prompt=True, help="Name of the LLM to remove")
+        llm_name: str = typer.Option(..., prompt=True, help="Name of the LLM to remove")
 ) -> None:
     """
     Remove an LLM configuration.
@@ -59,9 +59,9 @@ def remove_llm(
 
 @app.command()
 def set_default_llm(
-    llm_name: str = typer.Option(
-        ..., prompt=True, help="Name of the LLM to set as default"
-    )
+        llm_name: str = typer.Option(
+            ..., prompt=True, help="Name of the LLM to set as default"
+        )
 ) -> None:
     """
     Set an LLM as the default LLM.
@@ -87,7 +87,7 @@ def get_data_dir() -> None:
 
 @app.command()
 def set_data_dir(
-    data_dir: Path = typer.Option(..., prompt=True, help="Path to the data directory")
+        data_dir: Path = typer.Option(..., prompt=True, help="Path to the data directory")
 ) -> None:
     """
     Set the data directory path. This is where the books and decks are stored.
@@ -109,11 +109,11 @@ def get_settings_dir() -> None:
 
 @app.command()
 def set_logging_level(
-    level: str = typer.Option(
-        ...,
-        prompt=True,
-        help="Logging level. E.g. DEBUG, INFO, WARNING, ERROR, CRITICAL",
-    )
+        level: str = typer.Option(
+            ...,
+            prompt=True,
+            help="Logging level. E.g. DEBUG, INFO, WARNING, ERROR, CRITICAL",
+        )
 ) -> None:
     """
     Set the logging level.
@@ -122,3 +122,11 @@ def set_logging_level(
     settings.logger_level = level
     config_manager.write_settings(settings)
     typer.echo(f"Logging level set to {level}")
+
+
+@app.command()
+def get_settings_path() -> None:
+    """
+    Get the path to the configuration file.
+    """
+    typer.echo(config_manager.settings_path.as_posix())
