@@ -75,7 +75,14 @@ For each concept, create multiple cards that approach it from different angles.
         self.persistence_service = persistence_service
         self.llm_service = llm_service
 
-    def create_deck(self, book_name: str, start_page: int, end_page: int, out_dir: Path, system_prompt: str) -> str:
+    def create_deck(
+        self,
+        book_name: str,
+        start_page: int,
+        end_page: int,
+        out_dir: Path,
+        system_prompt: str,
+    ) -> str:
         """
         Create an Anki deck from specified pages of a textbook
         """
@@ -91,9 +98,7 @@ For each concept, create multiple cards that approach it from different angles.
                 logger.info(f"No content for page {page_num}, skipping...")
                 continue
 
-            cards = self._generate_cards_for_page(
-                page.content, page_num, system_prompt
-            )
+            cards = self._generate_cards_for_page(page.content, page_num, system_prompt)
             all_cards.extend(cards)
 
         if not all_cards:

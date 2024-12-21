@@ -6,7 +6,7 @@ A personal project designed to enhance Spanish language learning through automat
 - Textbook parsing using Ollama and pdf-extract-api
 - Anki flashcard generation from parsed content
 - Exercise generation based on textbook content
-- Flexible LLM integration (default: GPT-4)
+- Flexible LLM integration (default: GPT-4o)
 
 ## Prerequisites
 
@@ -35,7 +35,7 @@ git submodule update --init --recursive
 
 ## Configuration
 
-By default, the project uses GPT-4 for LLM content generation. Set your OpenAI API key:
+By default, the project uses GPT-4o for LLM content generation. Set your OpenAI API key:
 ```bash
 export OPENAI_API_KEY='your-key-here'
 ```

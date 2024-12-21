@@ -16,15 +16,17 @@ app.add_typer(book_app, name="book", help="Book management commands")
 
 @app.command()
 def create_deck_from_book(
-        book_name: str = Argument(..., help="The name of the textbook"),
-        start_page: int = Argument(..., help="The starting page number"),
-        end_page: int = Argument(..., help="The ending page number"),
-        out_dir: Path = Argument(Path("."), help="The directory to save the deck"),
-        llm_name: Optional[str] = Argument(
-            None, help="The name of the LLM to use, if not given the default LLM is used"
-        ),
-        custom_llm_prompt: Optional[str] = Option(None,
-                                                  help="This prompt will tell LLM how to generate the flashcards, otherwise the default prompt is used"),
+    book_name: str = Argument(..., help="The name of the textbook"),
+    start_page: int = Argument(..., help="The starting page number"),
+    end_page: int = Argument(..., help="The ending page number"),
+    out_dir: Path = Argument(Path("."), help="The directory to save the deck"),
+    llm_name: Optional[str] = Argument(
+        None, help="The name of the LLM to use, if not given the default LLM is used"
+    ),
+    custom_llm_prompt: Optional[str] = Option(
+        None,
+        help="This prompt will tell LLM how to generate the flashcards, otherwise the default prompt is used",
+    ),
 ) -> None:
     """
     Creates a deck of Anki flashcards out of a parsed textbook.
@@ -35,19 +37,21 @@ def create_deck_from_book(
     deck_service: DeckService = service_factory.deck_service()
 
     if custom_llm_prompt:
-        deck_service.create_deck(book_name, start_page, end_page, out_dir, custom_llm_prompt)
+        deck_service.create_deck(
+            book_name, start_page, end_page, out_dir, custom_llm_prompt
+        )
     else:
         deck_service.default_create_deck(book_name, start_page, end_page, out_dir)
 
 
 @app.command()
 def create_deck_from_prompt(
-        prompt: str = Argument(..., help="The prompt to generate the deck from"),
-        num_of_flashcards: int = Argument(25, help="The number of flashcards to generate"),
-        out_dir: Path = Argument(Path("."), help="The directory to save the deck"),
-        llm_name: Optional[str] = Argument(
-            None, help="The name of the LLM to use, if not given the default LLM is used"
-        ),
+    prompt: str = Argument(..., help="The prompt to generate the deck from"),
+    num_of_flashcards: int = Argument(25, help="The number of flashcards to generate"),
+    out_dir: Path = Argument(Path("."), help="The directory to save the deck"),
+    llm_name: Optional[str] = Argument(
+        None, help="The name of the LLM to use, if not given the default LLM is used"
+    ),
 ) -> None:
     """
     Creates a deck of Anki flashcards out of a prompt.
@@ -63,12 +67,12 @@ def create_deck_from_prompt(
 
 @app.command()
 def extract_exercises(
-        book_name: str = Argument(..., help="The name of the textbook"),
-        start_page: int = Argument(..., help="The starting page number"),
-        end_page: int = Argument(..., help="The ending page number"),
-        llm_name: Optional[str] = Argument(
-            None, help="The name of the LLM to use, if not given the default LLM is used"
-        ),
+    book_name: str = Argument(..., help="The name of the textbook"),
+    start_page: int = Argument(..., help="The starting page number"),
+    end_page: int = Argument(..., help="The ending page number"),
+    llm_name: Optional[str] = Argument(
+        None, help="The name of the LLM to use, if not given the default LLM is used"
+    ),
 ) -> None:
     """
     Extracts exercises from a parsed textbook using the LLM.
@@ -110,13 +114,13 @@ def parse_pdf(book_name: str) -> None:
 
 @app.command()
 def get_exercises_prompts(
-        book_name: str = Argument(..., help="The name of the textbook"),
-        start_page: int = Argument(..., help="The starting page number"),
-        end_page: int = Argument(..., help="The ending page number"),
-        out_dir: Path = Argument(Path("."), help="The directory to save the exercises"),
-        llm_name: Optional[str] = Argument(
-            None, help="The name of the LLM to use, if not given the default LLM is used"
-        ),
+    book_name: str = Argument(..., help="The name of the textbook"),
+    start_page: int = Argument(..., help="The starting page number"),
+    end_page: int = Argument(..., help="The ending page number"),
+    out_dir: Path = Argument(Path("."), help="The directory to save the exercises"),
+    llm_name: Optional[str] = Argument(
+        None, help="The name of the LLM to use, if not given the default LLM is used"
+    ),
 ) -> None:
     """
     Get all the prompts of the exercises

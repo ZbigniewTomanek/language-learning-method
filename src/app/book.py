@@ -38,7 +38,6 @@ def add(
     typer.echo(f"✅ {book_name} added successfully")
 
 
-
 @app.command()
 def extract_exercises(
     book_name: str = Argument(..., help="The name of the textbook"),
